@@ -5,13 +5,21 @@ import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 import sqlite3
 import time
+import requests
+import base64
+import os
 from datetime import datetime
 
+# ============ ТВОИ ДАННЫЕ ============
 ADMIN_BOT_TOKEN = "8545261117:AAFdfaOjNsGEdJzzesVGF3x_8II95vbsmzs"
 SUPER_ADMIN_ID = 7693302440
+GITHUB_TOKEN = "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"
+REPO_NAME = "markpro1111111-lab/mytestx-final"
+GITHUB_API_URL = f"https://api.github.com/repos/{REPO_NAME}/contents"
 
 bot = telebot.TeleBot(ADMIN_BOT_TOKEN)
 
+# ============ БАЗА ДАННЫХ ============
 conn = sqlite3.connect('admin_logs.db', check_same_thread=False)
 cursor = conn.cursor()
 cursor.execute('''
@@ -26,30 +34,124 @@ conn.commit()
 
 def log(action, details=""):
     cursor.execute('INSERT INTO logs (action, details, timestamp) VALUES (?, ?, ?)',
-                  (action, details, datetime.now()))
+                   (action, details, datetime.now()))
     conn.commit()
 
 def is_admin(user_id):
     return user_id == SUPER_ADMIN_ID
 
+# ============ GITHUB API ============
+def update_file_on_github(file_path, new_content, commit_message):
+    headers = {
+        "Authorization": f"token {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+
+    # Получаем текущий SHA файла
+    r = requests.get(f"{GITHUB_API_URL}/{file_path}", headers=headers)
+    sha = r.json().get("sha") if r.status_code == 200 else None
+
+    # Кодируем содержимое в base64
+    encoded = base64.b64encode(new_content.encode()).decode()
+
+    data = {
+        "message": commit_message,
+        "content": encoded,
+        "sha": sha
+    }
+
+    r = requests.put(f"{GITHUB_API_URL}/{file_path}", headers=headers, json=data)
+    return r.status_code in [200, 201]
+
+# ============ КОМАНДЫ ============
 @bot.message_handler(commands=['start'])
 def start(message):
     if not is_admin(message.from_user.id):
         bot.reply_to(message, "⛔ Доступ запрещён")
         return
+
     keyboard = InlineKeyboardMarkup(row_width=2)
     keyboard.add(
         InlineKeyboardButton("📊 Статус", callback_data="status"),
         InlineKeyboardButton("📝 Логи", callback_data="logs"),
         InlineKeyboardButton("📢 Рассылка", callback_data="broadcast"),
-        InlineKeyboardButton("🔄 Перезапуск", callback_data="restart")
+        InlineKeyboardButton("🔄 Перезапуск", callback_data="restart"),
+        InlineKeyboardButton("📥 Обновить код", callback_data="update_menu")
     )
-    bot.reply_to(message, "🔧 **АДМИН-ПАНЕЛЬ**\n\nВыбери действие:", parse_mode='Markdown', reply_markup=keyboard)
 
+    bot.reply_to(
+        message,
+        "🔧 **АДМИН-ПАНЕЛЬ УПРАВЛЕНИЯ**\n\n"
+        "Выбери действие или отправь файл для обновления:",
+        parse_mode='Markdown',
+        reply_markup=keyboard
+    )
+
+# ============ МЕНЮ ОБНОВЛЕНИЯ ============
+@bot.callback_query_handler(func=lambda call: call.data == "update_menu")
+def update_menu_callback(call):
+    if not is_admin(call.from_user.id):
+        return
+
+    keyboard = InlineKeyboardMarkup(row_width=1)
+    keyboard.add(
+        InlineKeyboardButton("📦 main_bot.py", callback_data="update_main"),
+        InlineKeyboardButton("🔧 admin_bot.py", callback_data="update_admin"),
+        InlineKeyboardButton("📄 client_template.bat", callback_data="update_template"),
+        InlineKeyboardButton("◀️ Назад", callback_data="back_to_main")
+    )
+
+    bot.edit_message_text(
+        "📥 **Какой файл хочешь обновить?**\n\n"
+        "Просто отправь мне новый файл, и я сам заменю его в GitHub.",
+        call.message.chat.id,
+        call.message.message_id,
+        parse_mode='Markdown',
+        reply_markup=keyboard
+    )
+
+# ============ ПРИЁМ ФАЙЛОВ ============
+@bot.message_handler(content_types=['document'])
+def handle_document(message):
+    if not is_admin(message.from_user.id):
+        return
+
+    file_name = message.document.file_name
+
+    # Разрешённые файлы для обновления
+    allowed_files = ["main_bot.py", "admin_bot.py", "client_template.bat"]
+
+    if file_name not in allowed_files:
+        bot.reply_to(message, "❌ Можно обновлять только: main_bot.py, admin_bot.py, client_template.bat")
+        return
+
+    bot.reply_to(message, f"⏳ Скачиваю {file_name}...")
+
+    file_info = bot.get_file(message.document.file_id)
+    downloaded_file = bot.download_file(file_info.file_path)
+
+    try:
+        content = downloaded_file.decode('utf-8')
+    except:
+        bot.reply_to(message, "❌ Файл должен быть в UTF-8 кодировке")
+        return
+
+    bot.reply_to(message, f"⏳ Отправляю в GitHub...")
+
+    success = update_file_on_github(file_name, content, f"📥 Обновление {file_name} через Telegram")
+
+    if success:
+        bot.reply_to(message, f"✅ {file_name} успешно обновлён в GitHub!\n\n🔄 Через минуту Railway подхватит изменения.")
+        log("ОБНОВЛЕНИЕ", f"{file_name} от @{message.from_user.username}")
+    else:
+        bot.reply_to(message, f"❌ Ошибка при обновлении {file_name}")
+
+# ============ СТАТУС ============
 @bot.callback_query_handler(func=lambda call: call.data == "status")
 def status_callback(call):
     if not is_admin(call.from_user.id):
         return
+
     main_conn = sqlite3.connect('shop.db')
     main_cursor = main_conn.cursor()
     main_cursor.execute('SELECT COUNT(*) FROM users')
@@ -57,6 +159,7 @@ def status_callback(call):
     main_cursor.execute('SELECT COUNT(*) FROM users WHERE expiry > ?', (datetime.now(),))
     active = main_cursor.fetchone()[0]
     main_conn.close()
+
     text = f"""
 📊 **СТАТИСТИКА**
 ━━━━━━━━━━━━━━━━━━━━━
@@ -67,33 +170,42 @@ def status_callback(call):
 """
     bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode='Markdown')
 
+# ============ ЛОГИ ============
 @bot.callback_query_handler(func=lambda call: call.data == "logs")
 def logs_callback(call):
     if not is_admin(call.from_user.id):
         return
+
     cursor.execute('SELECT * FROM logs ORDER BY timestamp DESC LIMIT 10')
     logs = cursor.fetchall()
+
     text = "📝 **ПОСЛЕДНИЕ ДЕЙСТВИЯ**\n━━━━━━━━━━━━━━━━━━━━━\n"
-    for log in logs:
-        text += f"\n🕐 {log[3][:19]}\n⚡ {log[1]}: {log[2]}\n━━━━━━━━━━━━━━━━━━━━━\n"
+    for log_entry in logs:
+        text += f"\n🕐 {log_entry[3][:19]}\n⚡ {log_entry[1]}: {log_entry[2]}\n━━━━━━━━━━━━━━━━━━━━━\n"
+
     bot.edit_message_text(text, call.message.chat.id, call.message.message_id, parse_mode='Markdown')
 
+# ============ РАССЫЛКА ============
 @bot.callback_query_handler(func=lambda call: call.data == "broadcast")
 def broadcast_callback(call):
     if not is_admin(call.from_user.id):
         return
+
     msg = bot.send_message(call.message.chat.id, "📢 **ВВЕДИ ТЕКСТ РАССЫЛКИ:**", parse_mode='Markdown')
     bot.register_next_step_handler(msg, process_broadcast)
 
 def process_broadcast(message):
     if not is_admin(message.from_user.id):
         return
+
     text = message.text
+
     main_conn = sqlite3.connect('shop.db')
     main_cursor = main_conn.cursor()
     main_cursor.execute('SELECT user_id FROM users')
     users = main_cursor.fetchall()
     main_conn.close()
+
     sent = 0
     for user in users:
         try:
@@ -102,19 +214,53 @@ def process_broadcast(message):
             time.sleep(0.05)
         except:
             pass
+
     log("РАССЫЛКА", f"Отправлено {sent} пользователям")
     bot.reply_to(message, f"✅ Рассылка завершена! Отправлено: {sent}")
 
+# ============ ПЕРЕЗАПУСК ============
 @bot.callback_query_handler(func=lambda call: call.data == "restart")
 def restart_callback(call):
     if not is_admin(call.from_user.id):
         return
-    bot.edit_message_text("🔄 Перезапуск...", call.message.chat.id, call.message.message_id)
-    log("ПЕРЕЗАПУСК", "Запрошен перезапуск бота")
 
+    bot.edit_message_text(
+        "🔄 **Перезапуск через Railway API**\n\n"
+        "Эта функция будет добавлена позже. Пока перезапусти вручную.",
+        call.message.chat.id,
+        call.message.message_id,
+        parse_mode='Markdown'
+    )
+    log("ПЕРЕЗАПУСК", "Запрошен перезапуск")
+
+# ============ НАЗАД ============
+@bot.callback_query_handler(func=lambda call: call.data == "back_to_main")
+def back_to_main_callback(call):
+    if not is_admin(call.from_user.id):
+        return
+
+    keyboard = InlineKeyboardMarkup(row_width=2)
+    keyboard.add(
+        InlineKeyboardButton("📊 Статус", callback_data="status"),
+        InlineKeyboardButton("📝 Логи", callback_data="logs"),
+        InlineKeyboardButton("📢 Рассылка", callback_data="broadcast"),
+        InlineKeyboardButton("🔄 Перезапуск", callback_data="restart"),
+        InlineKeyboardButton("📥 Обновить код", callback_data="update_menu")
+    )
+
+    bot.edit_message_text(
+        "🔧 **АДМИН-ПАНЕЛЬ УПРАВЛЕНИЯ**\n\n"
+        "Выбери действие или отправь файл для обновления:",
+        call.message.chat.id,
+        call.message.message_id,
+        parse_mode='Markdown',
+        reply_markup=keyboard
+    )
+
+# ============ ЗАПУСК ============
 if __name__ == "__main__":
     print("="*60)
-    print("🔧 MY TEST X - АДМИН-БОТ")
+    print("🔧 MY TEST X - АДМИН-БОТ (ПОЛНОЕ УПРАВЛЕНИЕ)")
     print("="*60)
     print("✅ Админ-бот запущен!")
     print("="*60)
