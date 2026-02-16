@@ -49,7 +49,7 @@ def create_client_file(user_id, code, plan):
         f.write(content)
     return filename
 
-def send_manual(chat_id, code):
+ def send_manual(chat_id, code):
     manual = f"""
 📚 **ПОЛНЫЙ МАНУАЛ MY TEST X ULTIMATE**
 
@@ -113,53 +113,4 @@ def buy_callback(call):
         InlineKeyboardButton("🔥 День (25⭐)", callback_data="pay_day"),
         InlineKeyboardButton("⚡ Неделя (100⭐)", callback_data="pay_week"),
         InlineKeyboardButton("🚀 Месяц (300⭐)", callback_data="pay_month"),
-        InlineKeyboardButton("💎 Год (1500⭐)", callback_data="pay_year"),
-        InlineKeyboardButton("◀️ Назад", callback_data="back")
-    )
-    bot.edit_message_text("💎 **ВЫБЕРИ ТАРИФ:**", call.message.chat.id, call.message.message_id, parse_mode='Markdown', reply_markup=keyboard)
-
-@bot.callback_query_handler(func=lambda call: call.data.startswith('pay_'))
-def pay_callback(call):
-    plan = call.data.replace('pay_', '')
-    price = PRICES.get(plan, 25)
-    prices = [telebot.types.LabeledPrice(label=plan.capitalize(), amount=price * 100)]
-    bot.send_invoice(
-        call.message.chat.id,
-        title=f"Подписка {plan.capitalize()}",
-        description=f"Тариф: {plan.capitalize()}",
-        invoice_payload=f"sub_{plan}_{call.from_user.id}",
-        provider_token="",
-        currency="XTR",
-        prices=prices
-    )
-
-@bot.pre_checkout_query_handler(func=lambda q: True)
-def pre_checkout(pre_checkout_query):
-    bot.answer_pre_checkout_query(pre_checkout_query.id, ok=True)
-
-@bot.message_handler(content_types=['successful_payment'])
-def successful_payment(message):
-    user_id = message.from_user.id
-    payload = message.successful_payment.invoice_payload
-    plan = payload.split('_')[1]
-    code = generate_code(user_id)
-    expiry = datetime.now() + timedelta(days={'day':1,'week':7,'month':30,'year':365}[plan])
-    cursor.execute('''
-        INSERT OR REPLACE INTO users (user_id, username, first_name, registered, code, plan, expiry)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    ''', (user_id, message.from_user.username, message.from_user.first_name, datetime.now(), code, plan, expiry))
-    conn.commit()
-    client_file = create_client_file(user_id, code, plan)
-    with open(client_file, 'rb') as f:
-        bot.send_document(user_id, f, caption="🔥 **ТВОЙ ГОТОВЫЙ ФАЙЛ!**\nСкопируй его на флешку.", parse_mode='Markdown')
-    send_manual(user_id, code)
-    bot.send_message(ADMIN_ID, f"💰 **ПРОДАЖА!**\n👤 Пользователь: {user_id}\n📆 Тариф: {plan}\n🎫 Код: {code}", parse_mode='Markdown')
-    os.remove(client_file)
-
-if __name__ == "__main__":
-    print("="*60)
-    print("🔥 MY TEST X - ОСНОВНОЙ БОТ")
-    print("="*60)
-    print("✅ Бот запущен!")
-    print("="*60)
-    bot.infinity_polling()
+        InlineKeyboardButton("💎 Год
