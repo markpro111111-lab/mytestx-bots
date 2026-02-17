@@ -1,3 +1,9 @@
 flask
 pyTelegramBotAPI
 requests
+keyboard
+pyautogui
+pygetwindow
+pywin32
+pillow
+pytesseract
