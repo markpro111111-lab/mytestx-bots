@@ -19,10 +19,7 @@ def run_bot(script):
         print(f"Error starting {script}: {e}")
 
 if __name__ == "__main__":
-    # Запускаем ботов в фоне
     threading.Thread(target=run_bot, args=("main_bot.py",)).start()
     threading.Thread(target=run_bot, args=("admin_bot.py",)).start()
-    
-    # Запускаем Flask на порту 10000 (Render ожидает этот порт)
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
