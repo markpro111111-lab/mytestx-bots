@@ -10,6 +10,19 @@ import os
 from datetime import datetime, timedelta
 
 TOKEN = "8105894338:AAF5KSBv3vba5fA0-ohpBWWs-CfKBA7DDK0"
+ADMIN_ID #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+import telebot
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+import sqlite3
+import random
+import string
+import os
+import base64
+from datetime import datetime, timedelta
+
+TOKEN = "8105894338:AAFgsw6vc_hFRwDJnmJaJEPwUshlh7O51PE"
 ADMIN_ID = 7693302440
 SUPPORT_USERNAME = "@MyTestX_support"
 
@@ -41,12 +54,19 @@ def generate_code(user_id):
     return ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
 
 def create_client_file(user_id, code, plan):
+    # Читаем шаблон клиента
     with open('client_template.bat', 'r', encoding='utf-8') as f:
         template = f.read()
-    content = template.replace('{{USER_CODE}}', code).replace('{{USER_ID}}', str(user_id))
+    
+    # Вставляем код пользователя
+    content = template.replace('{{USER_CODE}}', code)
+    content = content.replace('{{USER_ID}}', str(user_id))
+    
+    # Сохраняем файл
     filename = f"MyTestX_Client_{user_id}.bat"
     with open(filename, 'w', encoding='utf-8') as f:
         f.write(content)
+    
     return filename
 
 def send_manual(chat_id, code):
@@ -63,6 +83,7 @@ def send_manual(chat_id, code):
 
 1️⃣ Вставь флешку в компьютер
 2️⃣ Скопируй на неё полученный файл
+3️⃣ Всё! Больше ничего не нужно.
 
 🏫 В КЛАССЕ ИНФОРМАТИКИ:
 
@@ -151,7 +172,7 @@ def successful_payment(message):
     conn.commit()
     client_file = create_client_file(user_id, code, plan)
     with open(client_file, 'rb') as f:
-        bot.send_document(user_id, f, caption="🔥 **ТВОЙ ГОТОВЫЙ ФАЙЛ!**\nСкопируй его на флешку.", parse_mode='Markdown')
+        bot.send_document(user_id, f, caption="🔥 **ТВОЙ ГОТОВЫЙ ФАЙЛ!**\nСкопируй его на флешку и запусти.", parse_mode='Markdown')
     send_manual(user_id, code)
     bot.send_message(ADMIN_ID, f"💰 **ПРОДАЖА!**\n👤 Пользователь: {user_id}\n📆 Тариф: {plan}\n🎫 Код: {code}", parse_mode='Markdown')
     os.remove(client_file)
